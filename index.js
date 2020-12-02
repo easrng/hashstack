@@ -1,16 +1,16 @@
 // init sqlite db
 const dbFile = './hashstack.db';
 const fs = require('fs');
-
 const exists = fs.existsSync(dbFile);
 const sqlite3 = require('sqlite3').verbose();
 const ooPatch = require('json8-patch');
 const oo = require('json8');
+const crypto = require('crypto');
 
 const db = new sqlite3.Database(dbFile);
 db.serialize(() => {
   if (!exists) {
-    db.run('CREATE TABLE blockchain (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, previousHash TEXT, data TEXT, hash TEXT, nonce INTEGER );');
+    db.run('CREATE TABLE blockchain (id INTEGER PRIMARY KEY, timestamp TEXT, previousHash TEXT, data TEXT, hash TEXT, nonce INTEGER );');
     console.log('Database initialized!');
   } else {
     console.log('Database loaded!');
@@ -19,8 +19,8 @@ db.serialize(() => {
 class Block {
   constructor(index, timestamp, previousHash, data, hash, nonce) {
     this.index = index * 1;
-    this.timestamp = timestamp;
-    this.previousHash = previousHash;
+    this.timestamp = Math.floor(timestamp)+"";
+    this.previousHash = previousHash||undefined;
     this.data = data;
     this.nonce = nonce * 1 || 0;
     this.hash = hash;
@@ -70,28 +70,36 @@ class Block {
   }
 }
 class Blockchain {
-  constructor(o, d) {
+  constructor() {
     this.difficulty = 1;
-    if (o) {
-      this.blocks = o.map((e) => new Block(
-        e.index,
-        e.timestamp,
-        e.previousHash,
-        e.data,
-        e.hash,
-        e.nonce,
-      ));
-    } else {
-      this.blocks = [];
-    }
+    this._blocks = [];
   }
 
-  toJSON() {
-    return this.blocks.map((e) => e.toJSON());
+  async init() {
+    return await new Promise((cb, errcb) => {
+      db.all('SELECT * from blockchain', (err, rows) => {
+        if (err) return errcb(err);
+        rows = rows || [];
+        this._blocks=rows.map((e) => {
+          const {
+            id, timestamp, previousHash, data, hash, nonce,
+          } = e;
+          return new Block(
+            id,
+            timestamp,
+            previousHash,
+            data,
+            hash,
+            nonce,
+          )
+        });
+        cb();
+      });
+    });
   }
 
   latestBlock() {
-    return this.blocks[this.blocks.length - 1];
+    return this._blocks[this._blocks.length - 1];
   }
 
   newBlock(data) {
@@ -105,15 +113,26 @@ class Blockchain {
       index,
       new Date().valueOf(),
       (latestBlock || {}).hash,
-      data,
+      data
     );
     block.hash = block.calculateHash();
     block.mineBlock(this.difficulty);
     return block;
   }
 
-  validateFirstBlock() {
-    const firstBlock = this.blocks[0];
+  addBlock(block){
+    if(!this.isValidNewBlock(block,this.latestBlock())) throw new Error("Invalid block!")
+    this._blocks.push(block)
+    let {index, timestamp, previousHash, data, hash, nonce}=block;
+    db.run("INSERT INTO blockchain (id, timestamp, previousHash, data, hash, nonce) VALUES (?,?,?,?,?,?);",index, timestamp, previousHash, data, hash, nonce)
+  }
+
+  get blocks(){
+    return this._blocks
+  }
+
+  validateFirstBlock(block) {
+    const firstBlock = block||this._blocks[0];
     if (!firstBlock) return true; // blockchain is empty
     if (firstBlock.index != 0) {
       throw new Error('First block is not at index 0!');
@@ -137,6 +156,7 @@ class Blockchain {
   isValidNewBlock(newBlock, previousBlock) {
     if (newBlock != null && previousBlock != null) {
       if (previousBlock.index + 1 != newBlock.index) {
+        console.log("Not directly after current block.")
         return false;
       }
 
@@ -144,6 +164,7 @@ class Blockchain {
         newBlock.previousHash == null
         || newBlock.previousHash != previousBlock.hash
       ) {
+        console.log("invalid previous hash")
         return false;
       }
 
@@ -151,21 +172,29 @@ class Blockchain {
         newBlock.hash == null
         || (newBlock.calculateHash()) != newBlock.hash
       ) {
+        console.log("invalid hash")
         return false;
       }
 
       return true;
     }
-
+    if(newBlock&&newBlock.index==0&&!previousBlock){
+      try{
+        this.validateFirstBlock(newBlock)
+        return true;
+      }catch(e){
+        return false;
+      }
+    }
     return false;
   }
 
   validateBlockChain() {
     this.validateFirstBlock(); // Will throw if invalid
 
-    for (let i = 1; i < this.blocks.length; i++) {
-      const currentBlock = this.blocks[i];
-      const previousBlock = this.blocks[i - 1];
+    for (let i = 1; i < this._blocks.length; i++) {
+      const currentBlock = this._blocks[i];
+      const previousBlock = this._blocks[i - 1];
 
       if (!(this.isValidNewBlock(currentBlock, previousBlock))) {
         throw new Error(`Block ${i} is invalid!`);
@@ -176,64 +205,32 @@ class Blockchain {
   }
 
   toString() {
-    return this.blocks.map((e) => e.toString()).join('\n');
+    return this._blocks.map((e) => e.toString()).join('\n');
   }
-}
-
-function loadChain() {
-  return new Promise((cb, errcb) => {
-    db.all('SELECT * from blockchain', (err, rows) => {
-      if (err) return errcb(err);
-      rows = rows || [];
-      cb(rows.map((e) => {
-        const {
-          id, timestamp, previousHash, data, hash, nonce,
-        } = e;
-        return {
-          index: id, timestamp, previousHash, data, hash, nonce,
-        };
-      }));
-    });
-  });
 }
 
 function hash(message) {
-  let txtHash = '';
-  const rawHash = Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256,
-    message,
-    Utilities.Charset.UTF_8,
-  );
-  for (i = 0; i < rawHash.length; i++) {
-    let hashVal = rawHash[i];
-
-    if (hashVal < 0) {
-      hashVal += 256;
-    }
-    if (hashVal.toString(16).length == 1) {
-      txtHash += '0';
-    }
-    txtHash += hashVal.toString(16);
-  }
-  // change below to "txtHash.toUpperCase()" if needed
-  return txtHash;
+  const hash = crypto.createHash('sha256');
+  hash.update(message);
+  return hash.digest('hex');
 }
 
+let blockchain, odb;
 (async () => {
-  const blockchain = new Blockchain();
+  blockchain = new Blockchain();
+  await blockchain.init()
   console.log(
     `Blockchain valid? ${
       (blockchain.validateBlockChain()) ? 'yes' : 'no'}`,
   );
   blockchain.blocks.map((e) => console.log(e.str()));
-  const db = new Proxy({}, {
+  odb = new Proxy({}, {
     get: (o, k) => o[k],
     set: (o, k, v) => {
       const old = oo.clone(o);
       o[k] = v;
-      blockchain.blocks.push(blockchain.newBlock(JSON.stringify(ooPatch.diff(old, o))));
+      blockchain.addBlock(blockchain.newBlock(JSON.stringify(ooPatch.diff(old, o))));
       return o[k];
     },
   });
 })();
-// db.run("INSERT INTO blockchain (id, timestamp, previousHash, data, hash, nonce) VALUES (?,?,?,?,?,?);")
