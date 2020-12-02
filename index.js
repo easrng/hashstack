@@ -218,8 +218,8 @@ function hash(message) {
   return hash.digest('hex');
 }
 
-let blockchain; let
-  odb;
+let blockchain;
+let odb;
 (async () => {
   blockchain = new Blockchain();
   await blockchain.init();
@@ -227,8 +227,8 @@ let blockchain; let
     `Blockchain valid? ${
       (blockchain.validateBlockChain()) ? 'yes' : 'no'}`,
   );
-  blockchain.blocks.map((e) => console.log(e.str()));
-  odb = new Proxy({}, {
+  const o = blockchain.blocks.reduce((object, patch) => ooPatch.apply(object, JSON.parse(patch.data)).doc, {});
+  odb = new Proxy(o, {
     get: (o, k) => o[k],
     set: (o, k, v) => {
       const old = oo.clone(o);
