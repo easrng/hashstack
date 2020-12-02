@@ -15,5 +15,10 @@
   "bugs": {
     "url": "https://github.com/easrng/hashstack/issues"
   },
-  "homepage": "https://github.com/easrng/hashstack#readme"
+  "homepage": "https://github.com/easrng/hashstack#readme",
+  "dependencies": {
+    "json8": "^1.0.3",
+    "json8-patch": "^1.0.4",
+    "sqlite3": "^5.0.0"
+  }
 }
