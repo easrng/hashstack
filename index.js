@@ -1,6 +1,7 @@
 // init sqlite db
 const dbFile = './hashstack.db';
 const fs = require('fs');
+
 const exists = fs.existsSync(dbFile);
 const sqlite3 = require('sqlite3').verbose();
 const ooPatch = require('json8-patch');
@@ -19,8 +20,8 @@ db.serialize(() => {
 class Block {
   constructor(index, timestamp, previousHash, data, hash, nonce) {
     this.index = index * 1;
-    this.timestamp = Math.floor(timestamp)+"";
-    this.previousHash = previousHash||undefined;
+    this.timestamp = `${Math.floor(timestamp)}`;
+    this.previousHash = previousHash || undefined;
     this.data = data;
     this.nonce = nonce * 1 || 0;
     this.hash = hash;
@@ -80,7 +81,7 @@ class Blockchain {
       db.all('SELECT * from blockchain', (err, rows) => {
         if (err) return errcb(err);
         rows = rows || [];
-        this._blocks=rows.map((e) => {
+        this._blocks = rows.map((e) => {
           const {
             id, timestamp, previousHash, data, hash, nonce,
           } = e;
@@ -91,7 +92,7 @@ class Blockchain {
             data,
             hash,
             nonce,
-          )
+          );
         });
         cb();
       });
@@ -113,26 +114,28 @@ class Blockchain {
       index,
       new Date().valueOf(),
       (latestBlock || {}).hash,
-      data
+      data,
     );
     block.hash = block.calculateHash();
     block.mineBlock(this.difficulty);
     return block;
   }
 
-  addBlock(block){
-    if(!this.isValidNewBlock(block,this.latestBlock())) throw new Error("Invalid block!")
-    this._blocks.push(block)
-    let {index, timestamp, previousHash, data, hash, nonce}=block;
-    db.run("INSERT INTO blockchain (id, timestamp, previousHash, data, hash, nonce) VALUES (?,?,?,?,?,?);",index, timestamp, previousHash, data, hash, nonce)
+  addBlock(block) {
+    if (!this.isValidNewBlock(block, this.latestBlock())) throw new Error('Invalid block!');
+    this._blocks.push(block);
+    const {
+      index, timestamp, previousHash, data, hash, nonce,
+    } = block;
+    db.run('INSERT INTO blockchain (id, timestamp, previousHash, data, hash, nonce) VALUES (?,?,?,?,?,?);', index, timestamp, previousHash, data, hash, nonce);
   }
 
-  get blocks(){
-    return this._blocks
+  get blocks() {
+    return this._blocks;
   }
 
   validateFirstBlock(block) {
-    const firstBlock = block||this._blocks[0];
+    const firstBlock = block || this._blocks[0];
     if (!firstBlock) return true; // blockchain is empty
     if (firstBlock.index != 0) {
       throw new Error('First block is not at index 0!');
@@ -156,7 +159,7 @@ class Blockchain {
   isValidNewBlock(newBlock, previousBlock) {
     if (newBlock != null && previousBlock != null) {
       if (previousBlock.index + 1 != newBlock.index) {
-        console.log("Not directly after current block.")
+        console.log('Not directly after current block.');
         return false;
       }
 
@@ -164,7 +167,7 @@ class Blockchain {
         newBlock.previousHash == null
         || newBlock.previousHash != previousBlock.hash
       ) {
-        console.log("invalid previous hash")
+        console.log('invalid previous hash');
         return false;
       }
 
@@ -172,17 +175,17 @@ class Blockchain {
         newBlock.hash == null
         || (newBlock.calculateHash()) != newBlock.hash
       ) {
-        console.log("invalid hash")
+        console.log('invalid hash');
         return false;
       }
 
       return true;
     }
-    if(newBlock&&newBlock.index==0&&!previousBlock){
-      try{
-        this.validateFirstBlock(newBlock)
+    if (newBlock && newBlock.index == 0 && !previousBlock) {
+      try {
+        this.validateFirstBlock(newBlock);
         return true;
-      }catch(e){
+      } catch (e) {
         return false;
       }
     }
@@ -215,10 +218,11 @@ function hash(message) {
   return hash.digest('hex');
 }
 
-let blockchain, odb;
+let blockchain; let
+  odb;
 (async () => {
   blockchain = new Blockchain();
-  await blockchain.init()
+  await blockchain.init();
   console.log(
     `Blockchain valid? ${
       (blockchain.validateBlockChain()) ? 'yes' : 'no'}`,
