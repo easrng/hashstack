@@ -1,0 +1,19 @@
+{
+  "name": "hashstack",
+  "version": "0.0.1",
+  "description": "A peer-to-peer distributed database",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/easrng/hashstack.git"
+  },
+  "author": "easrng",
+  "license": "AGPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/easrng/hashstack/issues"
+  },
+  "homepage": "https://github.com/easrng/hashstack#readme"
+}
